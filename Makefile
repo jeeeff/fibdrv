@@ -27,6 +27,13 @@ unload:
 client: client.c
 	$(CC) -o $@ $^
 
+analysis: analysis.c
+	$(CC) -o $@ $^
+
+plot: analysis.gp analysis
+	gnuplot $<
+	eog performance.png
+
 PRINTF = env printf
 PASS_COLOR = \e[32;01m
 NO_COLOR = \e[0m
