@@ -10,11 +10,12 @@
 
 #define FIB_DEV "/dev/fibonacci"
 
-#define MAX_LENGTH 100
+#define MAX_LENGTH 150
 
 struct BigN {
     unsigned long long lower;
     unsigned long long upper;
+//    unsigned long long top;
 };
 
 static inline void addBigN(struct BigN *r, struct BigN *x, struct BigN *y)
@@ -24,6 +25,9 @@ static inline void addBigN(struct BigN *r, struct BigN *x, struct BigN *y)
     if (y->lower > ~x->lower)
         r->upper++;
     r->lower = x->lower + y->lower;
+//    r->top = x->top + y->top;
+//    if (y->upper > ~x->upper)
+//	r->top++;
 }
 
 static struct BigN *subtractBigN(struct BigN *r, struct BigN *x, struct BigN *y)
@@ -93,9 +97,11 @@ static struct BigN fib_sequence(long long k)
     /* FIXME: use clz/ctz and fast algorithms to speed up */
     struct BigN f[k + 2];
 
+//    f[0].top = 0;
     f[0].upper = 0;
     f[0].lower = 0;
 
+//    f[1].top = 0;
     f[1].upper = 0;
     f[1].lower = 1;
 
@@ -105,6 +111,49 @@ static struct BigN fib_sequence(long long k)
 
     return f[k];
 }
+
+static struct BigN fib_3(int k)
+{
+    struct BigN t1,t2,t3;
+//    t1.top = 0;
+    t1.upper = 0;
+    t1.lower = 1;
+//    t2.top = 0;
+    t2.upper = 0;
+    t2.lower = 0;
+
+    for(int i=2;i<=k;i++)
+    {
+        addBigN(&t3,&t1,&t2);
+        t2 = t1;
+        t1 = t3;
+    }
+
+    return t3;
+}
+
+/*static struct BigN fib_3(int k)
+{
+    struct uint128_t t1,t2,t3;
+    t1.upper = 0;
+    t1.lower = 1;
+    t2.upper = 0;
+    t2.lower = 0;
+
+    for(int i=2;i<=k;i++)
+    {
+        add128(&t3,t1,t2);
+        t2 = t1;
+        t1 = t3;
+        //printf("%d : %llx%llx\n",i , t3.upper, t3.lower);
+    }
+
+    struct BigN rs;
+    rs.upper = t3.upper;
+    rs.lower = t3.lower;
+    return rs;
+}*/
+
 
 static struct BigN fast_fib_sequence_wo_clz(long long k)
 {
@@ -211,13 +260,13 @@ void get_big_fibnum(char *buf, long long sz)
 void display_big_fibnum(int index, struct BigN res)
 {
     // printf("%d = %llu  %llu\n", index, res.upper, res.lower);
-    char buf[100] = {0};
+    char buf[1000] = {0};
     snprintf(buf, sizeof(buf), "%llu", res.lower);
     get_big_fibnum(buf, res.upper);
     printf("%d = %s\n", index, buf);
 }
 
-static struct BigN fib_ctz(int k)
+static uint128_t fib_ctz(int k)
 {
     uint128_t a = {.lower = 0, .upper = 0};
     uint128_t b = {.lower = 1, .upper = 0};
@@ -226,71 +275,142 @@ static struct BigN fib_ctz(int k)
 	    a = a;
 	else
 	    a = b;
-	struct BigN rs;
-        rs.upper = a.upper;
-        rs.lower = a.lower;
-        return rs;
+        return a;
     }
 
     int clz = __builtin_clzll(k);
 
     for (int i = (64 - clz); i > 0; i--) {
         uint128_t t1, t2, tmp;
-        lsft128(&tmp, b, 1);   // tmp = 2b
-        sub128(&tmp, tmp, a);  // tmp = tmp -a
-        mul128(&t1, a, tmp);   // t1 = a*tmp
+        ls_t(&tmp, b, 1);   // tmp = 2b
+        sub_t(&tmp, tmp, a);  // tmp = tmp -a
+        mul_t(&t1, a, tmp);   // t1 = a*tmp
 
-        mul128(&a, a, a);   // a = a^2
-        mul128(&b, b, b);   // b = b^2
-        add128(&t2, a, b);  // t2 = a^2 + b^2
+        mul_t(&a, a, a);   // a = a^2
+        mul_t(&b, b, b);   // b = b^2
+        add_t(&t2, a, b);  // t2 = a^2 + b^2
         a = t1;
         b = t2;
         if (k & (1ull << (i - 1))) {  // current bit == 1
-            add128(&t1, a, b);
+            add_t(&t1, a, b);
             a = b;
             b = t1;
         }
     }
 
-    struct BigN rs;
-    rs.upper = a.upper;
-    rs.lower = a.lower;
-    return rs;
+    return a;
 }
 
+static uint128_t fib_fast_logn(int k, uint128_t ans0, uint128_t ans1)
+{
+    if (!k) {
+        ans0.upper = 0llu;
+	ans0.lower = 0llu;
+	ans1.upper = 0llu;
+	ans1.lower = 1llu;
+    }
+    fib_fast_logn((k/2),ans0, ans1);
+    uint128_t a = ans0;
+    uint128_t b = ans1;
+    uint128_t c, d ;
+    add_t(&b,b,b);
+    sub_t(&c,b,a);
+    mul_t(&c,a,c);
+    mul_t(&a,a,a);
+    mul_t(&b,b,b);
+    add_t(&d,a,b);
+
+    if(k%2) {
+        ans0 = d;
+	add_t(&ans1,c,d);
+    } else {
+	ans0 = c;
+	ans1 = d;
+    }
+
+    return ans0;
+}
+    
+#define count 1
 
 int main()
 {
     FILE *fp = fopen("./performance", "w");
-    char time_buf[100] = {0};
+    char time_buf[500] = {0};
 
-    for (int i = 0; i <= MAX_LENGTH; i++) {
+    double t1_rs, t2_rs, t3_rs;
+
+    for (int i = 10; i <= MAX_LENGTH; i++) {
         struct timespec start, stop;
 
+	t1_rs = 0;
+	t2_rs = 0;
+	t3_rs = 0;
+
+        double t1, t2, t3;
+
         /* fib_sequence */
-        clock_gettime(CLOCK_MONOTONIC, &start);
-        struct BigN res1 = fib_sequence(i);
-        // display_big_fibnum(i, res1);
-        clock_gettime(CLOCK_MONOTONIC, &stop);
-        double t1 = diff_in_ns(start, stop);
+/*        for(int j = 0; j < count; j++) {
+            clock_gettime(CLOCK_MONOTONIC, &start);
+            struct BigN res1 = fib_sequence(i);
+            if(j == 0)
+	    	display_big_fibnum(i, res1);
+            clock_gettime(CLOCK_MONOTONIC, &stop);
+            t1 = diff_in_ns(start, stop);
+	    t1_rs += t1;
+        }*/
 
-        /* fast_fib_sequence_wo_clz */
-        clock_gettime(CLOCK_MONOTONIC, &start);
-        struct BigN res2 = fast_fib_sequence_wo_clz(i);
-        clock_gettime(CLOCK_MONOTONIC, &stop);
-        display_big_fibnum(i, res2);
-        double t2 = diff_in_ns(start, stop);
+        /* fib_ctz */
+/*	for(int j = 0; j < count; j++) {
+            clock_gettime(CLOCK_MONOTONIC, &start);
+            uint128_t x = fib_ctz(i);
+            clock_gettime(CLOCK_MONOTONIC, &stop);
 
-	/* fib_ctz */
-        clock_gettime(CLOCK_MONOTONIC, &start);
-        struct BigN res3 = fib_ctz(i);
-        clock_gettime(CLOCK_MONOTONIC, &stop);
-        display_big_fibnum(i, res3);
-        double t3 = diff_in_ns(start, stop);
+	    struct BigN res2;
+            res2.upper = x.upper;
+	    res2.lower = x.lower;
 
-        // snprintf(time_buf, sizeof(time_buf), "%d %.10lf\n", i, t1);
-        snprintf(time_buf, sizeof(time_buf), "%d %.10lf %.10lf %.10lf\n", i, t1, t2, t3);
+	    if(j == 0)
+	        display_big_fibnum(i, res2);
+            t2 = diff_in_ns(start, stop);
+	    t2_rs += t2;
+	}*/
+
+	/* fast_logn */
+        for(int j = 0; j < count; j++) {
+            clock_gettime(CLOCK_MONOTONIC, &start);
+	    uint128_t ans0 = {.lower = 0, .upper = 0};
+	    uint128_t ans1 = {.lower = 0, .upper = 0};
+            uint128_t y = fib_fast_logn(i,ans0, ans1);
+            clock_gettime(CLOCK_MONOTONIC, &stop);
+
+	    struct BigN res3;
+	    res3.upper = y.upper;
+	    res3.lower = y.lower;
+
+            if(j == 0)
+                display_big_fibnum(i, res3);
+            t3 = diff_in_ns(start, stop);
+            t3_rs += t3;
+        }
+
+        /* fib_3  */
+        /*for(int j = 0; j < count; j++) {
+            clock_gettime(CLOCK_MONOTONIC, &start);
+            struct BigN res3 = fib_3(i);
+            clock_gettime(CLOCK_MONOTONIC, &stop);
+            if(j == 0)
+                display_big_fibnum(i, res3);
+            t3 = diff_in_ns(start, stop);
+            t3_rs += t3;
+        }*/
+
+//        t1_rs /= count;
+//	t2_rs /= count;
+        t3_rs /= count;
+	snprintf(time_buf, sizeof(time_buf), "%d %.10lf %.10lf %.10lf\n", i, t3, t3, t3);
         fputs(time_buf, fp);
     }
+
     return 0;
 }

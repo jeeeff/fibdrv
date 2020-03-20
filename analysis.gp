@@ -10,7 +10,7 @@ set output 'performance.png'
 set key left top
 set format y
 
-plot [:100][:]'performance' \
-	using 2:xtic(10) with linespoints linewidth 2 title 'Arbitrary precision arithmetic', \
-''  using 3:xtic(10) with linespoints linewidth 2 title 'Fast fib sequence without clz', \
-''  using 4:xtic(10) with linespoints linewidth 2 title 'Fast doubling'
+plot [:][:]'performance' \
+	using 2:xtic(10) with linespoints linewidth 2 title 'k + 2', \
+''  using 3:xtic(10) with linespoints linewidth 2 title 'fib ctz', \
+''  using 4:xtic(10) with linespoints linewidth 2 title 'fast logn'\
