@@ -301,37 +301,45 @@ static uint128_t fib_ctz(int k)
     return a;
 }
 
-static uint128_t fib_fast_logn(int k, uint128_t ans0, uint128_t ans1)
+void fib_fast_logn(int k, uint128_t *ans0, uint128_t *ans1)
 {
-    if (!k) {
-        ans0.upper = 0llu;
-	ans0.lower = 0llu;
-	ans1.upper = 0llu;
-	ans1.lower = 1llu;
+    if (k == 0) {
+        ans0->upper = 0llu;
+	ans0->lower = 0llu;
+	ans1->upper = 0llu;
+	ans1->lower = 1llu;
+    	return;
     }
-    fib_fast_logn((k/2),ans0, ans1);
-    uint128_t a = ans0;
-    uint128_t b = ans1;
-    uint128_t c, d ;
-    add_t(&b,b,b);
-    sub_t(&c,b,a);
-    mul_t(&c,a,c);
+
+    fib_fast_logn((k/2), ans0, ans1);
+    uint128_t a = *ans0;
+    uint128_t b = *ans1;
+//    printf("*********%d************ %llu %llu\n",k ,a.upper, a.lower);
+
+    uint128_t b2; 
+    uint128_t c = {.upper = 0llu, .lower = 0llu};
+    uint128_t d = {.upper = 0llu, .lower = 0llu};
+    add_t(&b2,b,b);
+    sub_t(&c,b2,a);
+
+    //printf("*********%d************ %llu %llu\n",k ,b2.upper, b2.lower); 
+    uint128_t cpa = {.upper = 0llu, .lower = 0llu};
+    mul_t(&cpa,a,c);
     mul_t(&a,a,a);
     mul_t(&b,b,b);
     add_t(&d,a,b);
 
     if(k%2) {
-        ans0 = d;
-	add_t(&ans1,c,d);
+        *ans0 = d;
+	add_t(ans1,cpa,d);
     } else {
-	ans0 = c;
-	ans1 = d;
+	*ans0 = cpa;
+	*ans1 = d;
     }
-
-    return ans0;
+    //printf("*********%d************ %llu %llu\n",k ,c.upper, c.lower);
 }
     
-#define count 1
+#define count 10000
 
 int main()
 {
@@ -340,7 +348,7 @@ int main()
 
     double t1_rs, t2_rs, t3_rs;
 
-    for (int i = 10; i <= MAX_LENGTH; i++) {
+    for (int i = 1; i <= MAX_LENGTH; i++) {
         struct timespec start, stop;
 
 	t1_rs = 0;
@@ -350,7 +358,7 @@ int main()
         double t1, t2, t3;
 
         /* fib_sequence */
-/*        for(int j = 0; j < count; j++) {
+        for(int j = 0; j < count; j++) {
             clock_gettime(CLOCK_MONOTONIC, &start);
             struct BigN res1 = fib_sequence(i);
             if(j == 0)
@@ -358,10 +366,10 @@ int main()
             clock_gettime(CLOCK_MONOTONIC, &stop);
             t1 = diff_in_ns(start, stop);
 	    t1_rs += t1;
-        }*/
+        }
 
         /* fib_ctz */
-/*	for(int j = 0; j < count; j++) {
+	for(int j = 0; j < count; j++) {
             clock_gettime(CLOCK_MONOTONIC, &start);
             uint128_t x = fib_ctz(i);
             clock_gettime(CLOCK_MONOTONIC, &stop);
@@ -374,24 +382,29 @@ int main()
 	        display_big_fibnum(i, res2);
             t2 = diff_in_ns(start, stop);
 	    t2_rs += t2;
-	}*/
+	}
 
 	/* fast_logn */
         for(int j = 0; j < count; j++) {
             clock_gettime(CLOCK_MONOTONIC, &start);
-	    uint128_t ans0 = {.lower = 0, .upper = 0};
-	    uint128_t ans1 = {.lower = 0, .upper = 0};
-            uint128_t y = fib_fast_logn(i,ans0, ans1);
+	    uint128_t ans0;
+            ans0.upper = 0llu;
+            ans0.lower = 0llu;
+	    uint128_t ans1;
+            ans0.upper = 0llu;
+            ans0.lower = 0llu;
+            fib_fast_logn(i, &ans0, &ans1);
             clock_gettime(CLOCK_MONOTONIC, &stop);
 
 	    struct BigN res3;
-	    res3.upper = y.upper;
-	    res3.lower = y.lower;
+	    res3.upper = ans0.upper;
+	    res3.lower = ans0.lower;
 
             if(j == 0)
                 display_big_fibnum(i, res3);
             t3 = diff_in_ns(start, stop);
             t3_rs += t3;
+            //printf("%d : %llu %llu\n", i, ans0.upper, ans0.lower);  
         }
 
         /* fib_3  */
@@ -408,7 +421,7 @@ int main()
 //        t1_rs /= count;
 //	t2_rs /= count;
         t3_rs /= count;
-	snprintf(time_buf, sizeof(time_buf), "%d %.10lf %.10lf %.10lf\n", i, t3, t3, t3);
+	snprintf(time_buf, sizeof(time_buf), "%d %.10lf %.10lf %.10lf\n", i, t1, t2, t3);
         fputs(time_buf, fp);
     }
 
