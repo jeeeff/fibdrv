@@ -11,6 +11,6 @@ set key left top
 set format y
 
 plot [:][:]'performance' \
-	using 2:xtic(10) with linespoints linewidth 2 title 'k + 2', \
-''  using 3:xtic(10) with linespoints linewidth 2 title 'fib ctz', \
-''  using 4:xtic(10) with linespoints linewidth 2 title 'fast logn'\
+	using 2:xtic(10) with linespoints linewidth 2 title 'fib clzctz', \
+''  using 3:xtic(10) with linespoints linewidth 2 title 'fib fast doubling', \
+#''  using 4:xtic(10) with linespoints linewidth 2 title 'fib 3'\
